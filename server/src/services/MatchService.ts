@@ -1,7 +1,7 @@
 import { Couple } from '../models/Couple';
 import { NamePool } from '../models/NamePool';
 import { RoundVote } from '../models/RoundVote';
-import { memoryStore } from '../store/MemoryStore';
+import { NameRepository } from '../repositories/NameRepository';
 
 export interface MatchResult {
   round: number;
@@ -9,6 +9,8 @@ export interface MatchResult {
 }
 
 export class MatchService {
+  public constructor(private readonly nameRepository: NameRepository) {}
+
   public calculateRoundMatches(
     pool: NamePool,
     round: number,
@@ -30,9 +32,9 @@ export class MatchService {
     return { round, matches };
   }
 
-  public calculateSuperMatches(pool: NamePool, coupleId?: string): string[] {
+  public async calculateSuperMatches(pool: NamePool, coupleId?: string): Promise<string[]> {
     const targetCoupleId = coupleId ?? pool.id;
-    const votes = memoryStore.getVotesForCouple(targetCoupleId);
+    const votes = await this.nameRepository.getVotesForCouple(targetCoupleId);
     const scores = new Map<string, number>();
 
     for (const vote of votes) {
@@ -61,18 +63,16 @@ export class MatchService {
     return pool.names.filter((name) => !pool.eliminated.includes(name) && !dislikedSet.has(name));
   }
 
-  public recordVote(vote: RoundVote): void {
-    memoryStore.addVote(vote);
+  public async recordVote(vote: RoundVote): Promise<void> {
+    await this.nameRepository.addVote(vote);
   }
 
-  public advanceRound(couple: Couple, limit = 10): MatchResult {
+  public async advanceRound(couple: Couple, limit = 10): Promise<MatchResult> {
     const nextRound = couple.currentRound + 1;
     const exclusions = couple.superMatches;
     const result = this.calculateRoundMatches(couple.namePool, nextRound, limit, exclusions);
     couple.currentRound = nextRound;
-    memoryStore.updateCouple(couple);
+    await this.nameRepository.updateCouple(couple);
     return result;
   }
 }
-
-export const matchService = new MatchService();
