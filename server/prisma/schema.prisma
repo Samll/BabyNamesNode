@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Parent {
+  id           String @id
+  email        String @unique
+  passwordHash String
+  displayName  String
+  preferences  Json
+}
+
+model Couple {
+  id           String @id
+  code         String @unique
+  parents      Json
+  namePool     Json
+  currentRound Int
+  superMatches Json
+  votes        RoundVote[]
+}
+
+model RoundVote {
+  id        Int      @id @default(autoincrement())
+  coupleId  String
+  parentId  String
+  name      String
+  round     Int
+  vote      String
+  createdAt DateTime @default(now())
+
+  couple Couple @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId])
+}

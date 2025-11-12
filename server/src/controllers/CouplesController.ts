@@ -3,17 +3,18 @@ import { Response } from 'express';
 import { Couple } from '../models/Couple';
 import { NamePool } from '../models/NamePool';
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
-import { matchService } from '../services/MatchService';
-import { memoryStore } from '../store/MemoryStore';
+import { getMatchService, getNameRepository } from '../repositories';
 import { generateId } from '../utils/id';
 
 export class CouplesController {
-  public static invite(req: AuthenticatedRequest, res: Response): void {
+  public static async invite(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (!req.parentId) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
 
+    const nameRepository = getNameRepository();
+    const matchService = getMatchService();
     const { partnerId, names } = req.body as { partnerId?: string; names: string[] };
 
     const namePool: NamePool = {
@@ -32,23 +33,24 @@ export class CouplesController {
       superMatches: []
     };
 
-    memoryStore.addCouple(couple);
+    await nameRepository.createCouple(couple);
 
     const initialMatches = matchService.calculateRoundMatches(couple.namePool, 1);
     couple.currentRound = 1;
-    memoryStore.updateCouple(couple);
+    await nameRepository.updateCouple(couple);
 
     res.status(201).json({ coupleId: couple.id, code: couple.code, matches: initialMatches.matches });
   }
 
-  public static join(req: AuthenticatedRequest, res: Response): void {
+  public static async join(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (!req.parentId) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
 
+    const nameRepository = getNameRepository();
     const { code } = req.body as { code: string };
-    const couple = memoryStore.getCoupleByCode(code);
+    const couple = await nameRepository.findCoupleByCode(code);
     if (!couple) {
       res.status(404).json({ message: 'Invite not found' });
       return;
@@ -56,7 +58,7 @@ export class CouplesController {
 
     if (!couple.parents.includes(req.parentId)) {
       couple.parents.push(req.parentId);
-      memoryStore.updateCouple(couple);
+      await nameRepository.updateCouple(couple);
     }
 
     res.status(200).json({ coupleId: couple.id, currentRound: couple.currentRound, matches: couple.namePool.roundMatches });

@@ -1,32 +1,35 @@
 import { Response } from 'express';
 
 import { AuthenticatedRequest } from '../middlewares/authMiddleware';
-import { matchService } from '../services/MatchService';
-import { memoryStore } from '../store/MemoryStore';
+import { getMatchService, getNameRepository } from '../repositories';
 
 export class NamesController {
-  public static next(req: AuthenticatedRequest, res: Response): void {
+  public static async next(req: AuthenticatedRequest, res: Response): Promise<void> {
     const { coupleId, limit } = req.body as { coupleId: string; limit?: number };
-    const couple = memoryStore.getCouple(coupleId);
+    const nameRepository = getNameRepository();
+    const couple = await nameRepository.findCoupleById(coupleId);
     if (!couple) {
       res.status(404).json({ message: 'Couple not found' });
       return;
     }
 
+    const matchService = getMatchService();
     const nextRound = couple.currentRound + 1;
     const result = matchService.calculateRoundMatches(couple.namePool, nextRound, limit);
     couple.currentRound = nextRound;
-    memoryStore.updateCouple(couple);
+    await nameRepository.updateCouple(couple);
 
     res.status(200).json(result);
   }
 
-  public static vote(req: AuthenticatedRequest, res: Response): void {
+  public static async vote(req: AuthenticatedRequest, res: Response): Promise<void> {
     if (!req.parentId) {
       res.status(401).json({ message: 'Unauthorized' });
       return;
     }
 
+    const nameRepository = getNameRepository();
+    const matchService = getMatchService();
     const { coupleId, name, round, vote } = req.body as {
       coupleId: string;
       name: string;
@@ -34,13 +37,13 @@ export class NamesController {
       vote: 'like' | 'dislike';
     };
 
-    const couple = memoryStore.getCouple(coupleId);
+    const couple = await nameRepository.findCoupleById(coupleId);
     if (!couple) {
       res.status(404).json({ message: 'Couple not found' });
       return;
     }
 
-    matchService.recordVote({
+    await matchService.recordVote({
       coupleId,
       name,
       parentId: req.parentId,
@@ -53,8 +56,8 @@ export class NamesController {
       couple.namePool.eliminated.push(name);
     }
 
-    couple.superMatches = matchService.calculateSuperMatches(couple.namePool, couple.id);
-    memoryStore.updateCouple(couple);
+    couple.superMatches = await matchService.calculateSuperMatches(couple.namePool, couple.id);
+    await nameRepository.updateCouple(couple);
 
     res.status(200).json({ superMatches: couple.superMatches, eliminated: couple.namePool.eliminated });
   }

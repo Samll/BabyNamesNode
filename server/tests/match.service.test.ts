@@ -1,6 +1,6 @@
-import { matchService } from '../src/services/MatchService';
+import { MatchService } from '../src/services/MatchService';
 import { NamePool } from '../src/models/NamePool';
-import { memoryStore } from '../src/store/MemoryStore';
+import { MemoryNameRepository } from '../src/repositories/memory/NameRepository';
 
 const buildPool = (names: string[]): NamePool => ({
   id: 'pool-1',
@@ -10,13 +10,17 @@ const buildPool = (names: string[]): NamePool => ({
 });
 
 describe('MatchService', () => {
+  let matchService: MatchService;
+  let nameRepository: MemoryNameRepository;
+
   beforeEach(() => {
-    memoryStore.clear();
+    nameRepository = new MemoryNameRepository();
+    matchService = new MatchService(nameRepository);
   });
 
-  it('limits super matches to 10% of pool capped at 5 and at least one', () => {
+  it('limits super matches to 10% of pool capped at 5 and at least one', async () => {
     const pool = buildPool(Array.from({ length: 30 }, (_, index) => `Name-${index}`));
-    memoryStore.addCouple({
+    await nameRepository.createCouple({
       id: 'couple-1',
       code: 'ABC123',
       parents: [],
@@ -25,13 +29,13 @@ describe('MatchService', () => {
       superMatches: []
     });
 
-    const result = matchService.calculateSuperMatches(pool, 'couple-1');
+    const result = await matchService.calculateSuperMatches(pool, 'couple-1');
     expect(result).toHaveLength(3);
   });
 
-  it('ranks super matches by net votes', () => {
+  it('ranks super matches by net votes', async () => {
     const pool = buildPool(['Amelia', 'Noah', 'Olivia', 'Liam']);
-    memoryStore.addCouple({
+    await nameRepository.createCouple({
       id: 'couple-1',
       code: 'CODE',
       parents: [],
@@ -40,12 +44,12 @@ describe('MatchService', () => {
       superMatches: []
     });
 
-    matchService.recordVote({ coupleId: 'couple-1', name: 'Olivia', parentId: 'p1', round: 1, vote: 'like', createdAt: new Date() });
-    matchService.recordVote({ coupleId: 'couple-1', name: 'Olivia', parentId: 'p2', round: 1, vote: 'like', createdAt: new Date() });
-    matchService.recordVote({ coupleId: 'couple-1', name: 'Liam', parentId: 'p1', round: 1, vote: 'like', createdAt: new Date() });
-    matchService.recordVote({ coupleId: 'couple-1', name: 'Liam', parentId: 'p2', round: 1, vote: 'dislike', createdAt: new Date() });
+    await matchService.recordVote({ coupleId: 'couple-1', name: 'Olivia', parentId: 'p1', round: 1, vote: 'like', createdAt: new Date() });
+    await matchService.recordVote({ coupleId: 'couple-1', name: 'Olivia', parentId: 'p2', round: 1, vote: 'like', createdAt: new Date() });
+    await matchService.recordVote({ coupleId: 'couple-1', name: 'Liam', parentId: 'p1', round: 1, vote: 'like', createdAt: new Date() });
+    await matchService.recordVote({ coupleId: 'couple-1', name: 'Liam', parentId: 'p2', round: 1, vote: 'dislike', createdAt: new Date() });
 
-    const result = matchService.calculateSuperMatches(pool, 'couple-1');
+    const result = await matchService.calculateSuperMatches(pool, 'couple-1');
     expect(result[0]).toBe('Olivia');
     expect(result).toContain('Olivia');
   });

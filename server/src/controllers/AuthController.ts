@@ -4,14 +4,16 @@ import jwt from 'jsonwebtoken';
 
 import { JWT_SECRET, TOKEN_EXPIRATION } from '../config';
 import { Parent } from '../models/Parent';
-import { memoryStore } from '../store/MemoryStore';
+import { getParentRepository } from '../repositories';
 import { generateId } from '../utils/id';
 
 export class AuthController {
   public static async register(req: Request, res: Response): Promise<void> {
     const { email, password, displayName } = req.body as Record<string, string>;
 
-    if (memoryStore.getParentByEmail(email)) {
+    const parentRepository = getParentRepository();
+
+    if (await parentRepository.findByEmail(email)) {
       res.status(409).json({ message: 'Email already registered' });
       return;
     }
@@ -25,7 +27,7 @@ export class AuthController {
       preferences: { style: [], dislikedNames: [] }
     };
 
-    memoryStore.addParent(parent);
+    await parentRepository.create(parent);
 
     const token = jwt.sign({ parentId: parent.id }, JWT_SECRET, { expiresIn: TOKEN_EXPIRATION });
     res.status(201).json({ token, parent: { id: parent.id, displayName: parent.displayName, email: parent.email } });
@@ -33,7 +35,8 @@ export class AuthController {
 
   public static async login(req: Request, res: Response): Promise<void> {
     const { email, password } = req.body as Record<string, string>;
-    const parent = memoryStore.getParentByEmail(email);
+    const parentRepository = getParentRepository();
+    const parent = await parentRepository.findByEmail(email);
     if (!parent) {
       res.status(401).json({ message: 'Invalid credentials' });
       return;
